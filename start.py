@@ -26,10 +26,14 @@ from pydub.playback import play
 import threading
 import tkinter as tk
 
-PROJECT_PATH = "attenborough"
+PROJECT_PATH = "attenborough2_texts"
 TACOTRON_MODEL_PATH = "attenborough_v4_checkpoint_4225700(5050500)"
 WAVEGLOW_MODEL_PATH = "attenborough_v4_waveglow_2030200(3133000)1e-5"
-CHATGPT_MESSAGE = "a 5 paragraph text on *, narrated by david attenborough. use some funny nature jokes."
+
+MODEL_TYPE = "TACO" #VITS or TACO
+
+VITS_MODEL_PATH = "checkpoint_60000.pth"
+VITS_CONFIG_PATH = "config.json"
 
 class Control:
     def __init__(self):
@@ -83,7 +87,10 @@ class Control:
             
             if not self.is_inference_ready and not self.is_inference_running:
                 print("RUNNING INFERENCE")
-                self.run_inference_tacotron() #threaded
+                if MODEL_TYPE == "VITS":
+                    self.run_inference_vits()
+                else:
+                    self.run_inference_tacotron() #threaded
 
             if self.get_video_ready and self.is_inference_ready and not self.is_play_audio_running:       
                 print("STARTING SHOW")          
@@ -96,18 +103,22 @@ class Control:
         #copy ready video into main video
         shutil.copyfile("prep_video.mp4", "main_video.mp4")
         
-        #copy new wavs
-        for i, p in enumerate(self.wav_list):
-            shutil.copyfile(p, "wav_{}.wav".format(i))
-
-        self.is_audio_playing = True
-
-        time.sleep(3)
-
-        for i, w in enumerate(self.wav_list):
-            wave_obj = sa.WaveObject.from_wave_file("wav_{}.wav".format(i))            
+        if MODEL_TYPE == "VITS":
+            self.is_audio_playing = True
+            time.sleep(3)
+            wave_obj = sa.WaveObject.from_wave_file("speech.wav")            
             play_obj = wave_obj.play()
             play_obj.wait_done()
+        else:
+            for i, p in enumerate(self.wav_list):
+                shutil.copyfile(p, "wav_{}.wav".format(i))
+
+            self.is_audio_playing = True
+            time.sleep(3)
+            for i, w in enumerate(self.wav_list):
+                wave_obj = sa.WaveObject.from_wave_file("wav_{}.wav".format(i))            
+                play_obj = wave_obj.play()
+                play_obj.wait_done()
 
         self.is_audio_playing = False
         self.is_inference_ready = False
@@ -129,8 +140,13 @@ class Control:
         self.t_inf = threading.Thread(target=self.run_inference_tacotron_t, args=())
         self.t_inf.start()
 
+    def run_inference_vits(self):
+        self.is_inference_running = True
+        self.t_inf = threading.Thread(target=self.run_inference_vits_t, args=())
+        self.t_inf.start()
+
     def get_video(self):     
-        subdir = f"{PROJECT_PATH}_texts"      
+        subdir = f"{PROJECT_PATH}"      
         i = 0
         while True:
             filename = "{}/{}.txt".format(subdir, str(i))
@@ -138,7 +154,7 @@ class Control:
                 break
             i += 1
         r = random.randint(0, i)
-        f = "{}/{}.txt".format(subdir, r)
+        f = "{}/{}.txt".format(subdir, r-1)
         print("RUNNING VIDEO SEARCH FROM FILE {}".format(f))
         with open(f, 'r') as f:
             self.keyword = f.readline().strip()
@@ -160,7 +176,7 @@ class Control:
                 try:
                     videosSearch = None
                     while not videosSearch:
-                        videosSearch = VideosSearch(self.keyword, limit = 10) # limit = max number of returned videos
+                        videosSearch = VideosSearch("{} facts".format(self.keyword), limit = 10) # limit = max number of returned videos
                         time.sleep(0.5)       
 
                     # check durations and find best
@@ -231,14 +247,28 @@ class Control:
     def play_bumper_video(self):
         pass
 
+    def run_inference_vits_t(self):
+        text = self.chatgpt_message
+        text = text.replace('\n', '')
+        text = text.replace('"', '')
+        text = text.replace('”', '')
+        text = text.replace('“', '')         
+        OUTPUT_PATH = "speech.wav"
+        cmd = 'tts --text "{}" --model_path {} --config_path {} --out_path {}'.format(text, VITS_MODEL_PATH, VITS_CONFIG_PATH, OUTPUT_PATH)
+        print(cmd)
+        os.system(cmd)
+        print("DONE RUNNING INFERENCE")
+        self.is_inference_ready = True
+        self.is_inference_running = False
+
     def run_inference_tacotron_t(self):       
         # make 2 lines into one for better inference       
         #Split text 
         text = self.chatgpt_message
-        text = text.strip('\n')
-        text = text.strip('"')
-        text = text.strip('”')
-        text = text.strip('“')            
+        text = text.replace('\n', '')
+        text = text.replace('"', '')
+        text = text.replace('”', '')
+        text = text.replace('“', '')            
         text_list = re.split(r'(?<=[\.\!\?])\s*', text)
 
         #remove blank and short cuts
