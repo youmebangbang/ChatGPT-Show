@@ -1,13 +1,14 @@
+import re
 import random
 import os
 import time
 from pyChatGPT import ChatGPT
 
-CHATGPT_MESSAGE = "a 5 paragraph text on *, narrated by david attenborough. include the scientific name. Make funny nature jokes."
+CHATGPT_MESSAGE = "a 5 paragraph text on *, narrated by david attenborough. Make funny nature jokes. Include the scientific name."
 PROJECT_PATH = "attenborough2_texts"
 KEYWORDS_FILE = "keywords2.txt"
 HARVEST_RANDOMLY = False
-KEYWORD_STARTING_INDEX = 779
+KEYWORD_STARTING_INDEX = 2442
 
 try:
     keywords = []
@@ -31,6 +32,7 @@ def harvest_chatgpt():
             if keyword_index == keyword_length:
                 keyword_index = 0
                 print("HARVESTER REACHED END OF KEYWORD LIST")
+                exit()
 
         print("USING KEYWORD: {} {}/{}".format(keyword, keyword_index, keyword_length))
         
@@ -69,7 +71,11 @@ def harvest_chatgpt():
                 break
             i += 1
         
-        message = message.replace('́', '') #weird chatgpt chars
+        # message = message.replace('́', '') #weird chatgpt chars
+        message = message.replace('\n', ' ')
+        pattern = r'[\w\s\.,\-\'!?]+'
+        message = ''.join(re.findall(pattern, message))
+
         filename = "{}/{}.txt".format(subdir, i)
         with open(filename, 'w') as f:
             f.write("{}\n".format(keyword))
