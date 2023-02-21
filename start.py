@@ -38,14 +38,11 @@ MODEL_PREFIX = "da_"
 class Control:
     def __init__(self):
         self.first_run = True
-        self.previous_txt_path = ""
-        self.previous_video_path = ""
         self.is_episode_running = False
         self.run_inference = False
         self.is_audio_playing = False
         self.is_scene_running = False
         self.is_inference_ready = False
-        self.is_inference_running = False
         self.get_video_ready = False
         self.get_video_running = False
         self.is_play_audio_running = False
@@ -71,9 +68,6 @@ class Control:
         self.is_download_video_running = False
         self.playlist = []
 
-        self.search_text = ""
-
-   
     def run(self):        
 
         self.first_run = True
@@ -203,14 +197,13 @@ class Control:
         OUTPUT_PATH = f"{MODEL_PREFIX}speech.wav"
         if os.path.exists(OUTPUT_PATH):
             os.remove(OUTPUT_PATH)
-        cmd = f'tts --text "{text}" --model_path {VITS_MODEL_PATH} --config_path {VITS_CONFIG_PATH} --out_path {OUTPUT_PATH}'
+        cmd = f'tts --text "{text}" --model_path {VITS_MODEL_PATH} --config_path {VITS_CONFIG_PATH} --out_path {OUTPUT_PATH} --use_cuda USE_CUDA'
         # print(cmd)
 
         os.system(cmd)
         print("DONE RUNNING INFERENCE")
         self.is_inference_ready = True
         self.run_inference = False
-        # self.is_inference_running = False
    
     def get_video_link_and_download_t(self):
 
@@ -288,7 +281,7 @@ root_audio = tk.Tk()
 root.title("DAVID ATTERNBOROUGH VLC player in Tkinter")
 root.geometry("1280x720+1000+0")
 root_audio.title("David Attenborough Voice")
-root_audio.geometry("200x200+1000+300")
+root_audio.geometry("200x200+800+300")
 
 video_frame = tk.Frame(root, bg="black")
 video_frame.pack(fill=tk.BOTH, expand=True)

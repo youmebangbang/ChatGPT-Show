@@ -4,11 +4,11 @@ import os
 import time
 from pyChatGPT import ChatGPT
 
-CHATGPT_MESSAGE = "a 5 paragraph text on *, narrated by david attenborough. Make funny nature jokes. Include the scientific name."
-PROJECT_PATH = "attenborough2_texts"
-KEYWORDS_FILE = "keywords2.txt"
+CHATGPT_MESSAGE = "a 5 paragraph text on *, narrated by neil degrasse tyson. Make funny jokes."
+PROJECT_PATH = "ndt_texts"
+KEYWORDS_FILE = "keywords_ndt.txt"
 HARVEST_RANDOMLY = False
-KEYWORD_STARTING_INDEX = 2442
+KEYWORD_STARTING_INDEX = 689
 
 try:
     keywords = []
