@@ -2,23 +2,11 @@ from youtubesearchpython import VideosSearch
 import shutil
 import re
 import os
-import sys
 import time
 import random
 import vlc
-import torch
 import numpy as np
 
-sys.path.append('tacotron2/')
-sys.path.append('waveglow/')
-
-from hparams import create_hparams
-from model import Tacotron2
-from layers import TacotronSTFT, STFT
-from audio_processing import griffin_lim
-from train import load_model
-from text import text_to_sequence
-from denoiser import Denoiser
 import soundfile as sf
 import simpleaudio as sa
 from pydub import AudioSegment 
@@ -32,7 +20,7 @@ EPISODES_PATH = "da_episodes"
 MODEL_TYPE = "VITS" #VITS or TACO
 
 VITS_MODEL_PATH = "da_checkpoint.pth"
-VITS_CONFIG_PATH = "da_config.json"
+VITS_CONFIG_PATH = "config.json"
 MODEL_PREFIX = "da_"
 
 class Control:
@@ -95,7 +83,7 @@ class Control:
                 self.vlcplayer.stop()
                 print(f"FILENUM: {self.file_number} RUNVIDPATH: {self.running_video_path}")
                 
-                os.remove(f"{EPISODES_PATH}/{self.file_number-1}.mp4")
+                # os.remove(f"{EPISODES_PATH}/{self.file_number-1}.mp4")
 
                 time.sleep(1)
                 self.first_run = False
@@ -115,6 +103,7 @@ class Control:
 
             print("PLAYING AUDIO DONE")
 
+        self.vlcplayer_audio.stop()
         self.is_audio_playing = False
         self.run_inference_vits_t()        
         
@@ -139,33 +128,39 @@ class Control:
 
         print(f"Playing video {self.running_video_path}")   
 
-        vlcmedia = self.vlc_obj.media_new(self.running_video_path)
-        self.vlcplayer.set_media(vlcmedia)
-        self.vlcplayer.set_hwnd(video_frame.winfo_id())#tkinter label or frame
+        try:
+            vlcmedia = self.vlc_obj.media_new(self.running_video_path)
+            self.vlcplayer.set_media(vlcmedia)
+            self.vlcplayer.set_hwnd(video_frame.winfo_id())#tkinter label or frame
 
-        self.vlcplayer.audio_set_mute(True)
-        self.vlcplayer.play()
-        self.title_label.config(text="{}:: {}".format(self.running_keyword, self.running_video_title))
-        self.title_label.pack(side="bottom", anchor="sw")
-        video_title_timer = time.time()
+            self.vlcplayer.audio_set_mute(True)
+            self.vlcplayer.play()
+            self.title_label.config(text="{}:: {}".format(self.running_keyword, self.running_video_title))
+            self.title_label.pack(side="bottom", anchor="sw")
+            video_title_timer = time.time()
 
-        playing = set([1,2,3,4])
-        play = True
-        while play:
-            root.update_idletasks()
-            root.update()
-            if time.time() - video_title_timer >= 10:
-                if self.title_label.winfo_ismapped():
-                    self.title_label.pack_forget()
-            time.sleep(1)
-            if self.is_audio_playing == False:
-                self.next_episode_label.pack(side="bottom", anchor="se")
-                play = False
-            state = self.vlcplayer.get_state()
-            if state in playing:
-                continue
-            else:
-                play = False
+            playing = set([1,2,3,4])
+            play = True
+            while play:
+                root.update_idletasks()
+                root.update()
+                if time.time() - video_title_timer >= 10:
+                    if self.title_label.winfo_ismapped():
+                        self.title_label.pack_forget()
+                time.sleep(1)
+                if self.is_audio_playing == False:
+                    self.next_episode_label.pack(side="bottom", anchor="se")
+                    play = False
+                state = self.vlcplayer.get_state()
+                if state in playing:
+                    continue
+                else:
+                    play = False
+        except:
+            print("SOMETHING WENT WRONG WITH PLAYING VIDEO.")
+        else:
+            pass
+
         print("PLAYING VIDEO DONE")        
 
         while self.is_episode_running:
@@ -180,13 +175,13 @@ class Control:
             time.sleep(5)
         self.file_number = self.playlist.pop(0)    
 
-        with open(f"{EPISODES_PATH}/{self.file_number}.txt", 'r') as f:
-            self.running_keyword = f.readline().strip()
+        with open(f"{EPISODES_PATH}/{self.file_number}.txt", 'r', encoding="utf-8") as f:
+            self.running_keyword = f.readline().strip().capitalize()
             self.running_video_title = f.readline().strip()
             self.running_chatgpt_message = f.read()
         self.running_video_path = f"{EPISODES_PATH}/{self.file_number}.mp4"
 
-        os.remove(f"{EPISODES_PATH}/{self.file_number}.txt")
+        # os.remove(f"{EPISODES_PATH}/{self.file_number}.txt")
       
         print(f"NEXT SHOW KEYWORD: {self.running_keyword} from file {self.file_number}.txt")       
 
@@ -194,13 +189,43 @@ class Control:
         text = text.replace('\n', ' ') 
         pattern = r'[\w\s\.,:\-\'!?]+'
         text = ''.join(re.findall(pattern, text))
-        OUTPUT_PATH = f"{MODEL_PREFIX}speech.wav"
-        if os.path.exists(OUTPUT_PATH):
-            os.remove(OUTPUT_PATH)
-        cmd = f'tts --text "{text}" --model_path {VITS_MODEL_PATH} --config_path {VITS_CONFIG_PATH} --out_path {OUTPUT_PATH} --use_cuda USE_CUDA'
-        # print(cmd)
+        #clean text
 
-        os.system(cmd)
+        text_list = re.split(r'(?<=[\.\!\?])\s*', text)
+        # rebuild text so there are no short sentences. 
+
+        temp_string = ""
+        rebuilt_text = []      
+        for t in text_list:
+            t = t.strip()
+            if t:
+                if len([*temp_string]) + len([*t]) < 90:
+                    t = t.replace('.', ',')
+                    t = t.replace('?', ',')
+                    t = t.replace('!', ',')
+                    temp_string = temp_string + ' ' + t
+                else:
+                    rt = temp_string + ' ' + t
+                    rt = rt.strip()
+                    rebuilt_text.append(rt)
+                    temp_string = ""
+        if temp_string:
+            rebuilt_text.append(temp_string.strip())
+ 
+        # for t in rebuilt_text:
+        #     print(f"SPLIT: {t}")
+
+        text = ' '.join(rebuilt_text)
+
+        OUTPUT_PATH = f"{MODEL_PREFIX}speech.wav"     
+        if os.path.exists(OUTPUT_PATH):
+            os.remove(OUTPUT_PATH) 
+       
+        while not os.path.exists(OUTPUT_PATH):
+            cmd = f'tts --text "{text}" --model_path {VITS_MODEL_PATH} --config_path {VITS_CONFIG_PATH} --out_path {OUTPUT_PATH} --use_cuda USE_CUDA'
+            os.system(cmd)
+            time.sleep(.5)
+
         print("DONE RUNNING INFERENCE")
         self.is_inference_ready = True
         self.run_inference = False
@@ -215,58 +240,67 @@ class Control:
 
         file_number = 0
 
-        while True:    
+        while True:   
+             
             while len(self.playlist) > 10:
-                print("WAITING FOR PLAYLIST TO CLEAR")
+                print("WAITING FOR PLAYLIST TO SHRINK TO ADD MORE")
                 time.sleep(60)
 
-            files = os.listdir(TEXTS_PATH)
-            random_file = random.choice(files)
 
-            print("PREPPING EPISODE {}".format(random_file))
-            with open(f"{TEXTS_PATH}/{random_file}", 'r') as f:
-                self.keyword = f.readline().strip()
-                self.chatgpt_message = f.read().strip()
-        
-            while True:
-                try:
-                    videosSearch = None
-                    while not videosSearch:
-                        videosSearch = VideosSearch(f"{self.keyword} in nature", limit = 10) # limit = max number of returned videos
-                        time.sleep(0.5)       
+            while True:        
+                while True:
+                    files = os.listdir(TEXTS_PATH)
+                    print(F"TOTAL TEXT FILES FOR PLAYING IS {len(files)}")
+                    random_file = random.choice(files)
 
-                    # check durations and find best
-                    
-                    results = videosSearch.result()
-                    filtered = []
-                    for x in results['result']:
-                        if not "none" in x['duration']:
-                            d = x['duration'].split(':')[0]
-                            if int(d) <= 20 and int(d) >= 3:    
-                                filtered.append(x)
+                    print("PREPPING EPISODE {}".format(random_file))
+                    with open(f"{TEXTS_PATH}/{random_file}", 'r') as f:
+                        self.keyword = f.readline().strip()
+                        self.chatgpt_message = f.read().strip()
 
-                    r = random.randint(0,len(filtered)-1)
-                except:
-                    print("Video search failed, trying again with different keyword!")
-                    self.keyword = f"{self.keyword} facts"
-                    time.sleep(0.5)
-                else:
+                    try:
+                        videosSearch = None
+                        while not videosSearch:
+                            videosSearch = VideosSearch(f"{self.keyword} in nature", limit = 10) # limit = max number of returned videos
+                            time.sleep(0.5)       
+
+                        # check durations and find best
+                        
+                        results = videosSearch.result()
+                        filtered = []
+                        for x in results['result']:
+                            if not "none" in x['duration']:
+                                d = x['duration'].split(':')[0]
+                                if int(d) >= 3:    
+                                    filtered.append(x)
+
+                        r = random.randint(0,len(filtered)-1)
+                    except:
+                        print('\x1b[6;30;42m' + 'VIDEO SEARCH FAILED, TRYING ANOTHER EPISODE' + '\x1b[0m')
+                        time.sleep(0.5)
+                    else:
+                        break
+
+                #get video title
+                self.video_title = filtered[r]['title']
+                link =  filtered[r]['link']             
+                # os.system("yt-dlp {} -f 137 -o main_video.%(ext)s".format(link))
+                # os.system("yt-dlp {} -f 136 -o prep_video.%(ext)s".format(link))
+                os.system(f'yt-dlp {link} -N 100 --quiet --download-sections "*0:10-3:40" -f bv*[ext=mp4][acodec=none] --max-filesize 500M -o {EPISODES_PATH}/{file_number}.%(ext)s')
+
+                # write info to info file and add to playlist
+                with open(f"{EPISODES_PATH}/{file_number}.txt", 'w', encoding="utf-8") as f:
+                    f.write(f"{self.keyword}\n")   
+                    pattern = r'[\w\s\.,:\-\'!?]+'
+                    text = ''.join(re.findall(pattern, self.video_title))
+                    f.write(f"{text}\n")    
+                    f.write(f"{self.chatgpt_message}")
+
+                # check if download was success
+                if os.path.exists(f"{EPISODES_PATH}/{file_number}.mp4"):
                     break
-
-            #get video title
-            self.video_title = filtered[r]['title']
-            link =  filtered[r]['link']             
-            # os.system("yt-dlp {} -f 137 -o main_video.%(ext)s".format(link))
-            # os.system("yt-dlp {} -f 136 -o prep_video.%(ext)s".format(link))
-            os.system(f'yt-dlp {link} -N 100 --quiet --download-sections "*0:10-3:40" -f bv*[ext=mp4] --max-filesize 500M -o {EPISODES_PATH}/{file_number}.%(ext)s')
-
-            # write info to info file and add to playlist
-            with open(f"{EPISODES_PATH}/{file_number}.txt", 'w', encoding="utf-8") as f:
-                f.write(f"{self.keyword}\n")   
-                pattern = r'[\w\s\.,:\-\'!?]+'
-                text = ''.join(re.findall(pattern, self.video_title))
-                f.write(f"{text}\n")    
-                f.write(f"{self.chatgpt_message}")
+                else:
+                    print('\x1b[6;30;42m' + 'ERROR: YT-DLP TOOK A SHIT, TRYING AGAIN' + '\x1b[0m')
 
             self.playlist.append(file_number)
             file_number += 1
