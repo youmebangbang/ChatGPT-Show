@@ -188,42 +188,50 @@ class Control:
         text = self.running_chatgpt_message
         text = text.replace('\n', ' ') 
         pattern = r'[\w\s\.,:\-\'!?]+'
+        
         text = ''.join(re.findall(pattern, text))
         #clean text
 
-        text_list = re.split(r'(?<=[\.\!\?])\s*', text)
-        # rebuild text so there are no short sentences. 
+        # text_list = re.split(r'(?<=[\.\!\?])\s*', text)
+        # # rebuild text so there are no short sentences. 
 
-        temp_string = ""
-        rebuilt_text = []      
-        for t in text_list:
-            t = t.strip()
-            if t:
-                if len([*temp_string]) + len([*t]) < 90:
-                    t = t.replace('.', ',')
-                    t = t.replace('?', ',')
-                    t = t.replace('!', ',')
-                    temp_string = temp_string + ' ' + t
-                else:
-                    rt = temp_string + ' ' + t
-                    rt = rt.strip()
-                    rebuilt_text.append(rt)
-                    temp_string = ""
-        if temp_string:
-            rebuilt_text.append(temp_string.strip())
+        # temp_string = ""
+        # rebuilt_text = []      
+        # for t in text_list:
+        #     t = t.strip()
+        #     if t:
+        #         if len([*temp_string]) + len([*t]) < 90:
+        #             t = t.replace('.', ',')
+        #             t = t.replace('?', ',')
+        #             t = t.replace('!', ',')
+        #             temp_string = temp_string + ' ' + t
+        #         else:
+        #             rt = temp_string + ' ' + t
+        #             rt = rt.strip()
+        #             rebuilt_text.append(rt)
+        #             temp_string = ""
+        # if temp_string:
+        #     rebuilt_text.append(temp_string.strip())
  
-        # for t in rebuilt_text:
-        #     print(f"SPLIT: {t}")
+        # # for t in rebuilt_text:
+        # #     print(f"SPLIT: {t}")
 
-        text = ' '.join(rebuilt_text)
+        # text = ' '.join(rebuilt_text)
 
         OUTPUT_PATH = f"{MODEL_PREFIX}speech.wav"     
         if os.path.exists(OUTPUT_PATH):
             os.remove(OUTPUT_PATH) 
        
-        while not os.path.exists(OUTPUT_PATH):
+        while True:
             cmd = f'tts --text "{text}" --model_path {VITS_MODEL_PATH} --config_path {VITS_CONFIG_PATH} --out_path {OUTPUT_PATH} --use_cuda USE_CUDA'
             os.system(cmd)
+            if not os.path.exists(OUTPUT_PATH):
+                print("ERROR: COULDN'T GENERATE TTS")
+                with open("error_logs.txt", 'a', encoding="utf-8") as f:
+                    f.write(f"ERROR {OUTPUT_PATH} inferring file {self.file_number}.txt\n")
+                text = "Oh my goodness, it appears that my neural network has failed to produce the audio for this episode and I must go on to the next one. Please forgive my incompetence, as I am only a dumb computer program written in python and running on a disgusting windows 10 machine."
+            else:
+                break
             time.sleep(.5)
 
         print("DONE RUNNING INFERENCE")
