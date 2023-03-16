@@ -269,7 +269,7 @@ class Control:
                     try:
                         videosSearch = None
                         while not videosSearch:
-                            videosSearch = VideosSearch(f"{self.keyword} in nature", limit = 10) # limit = max number of returned videos
+                            videosSearch = VideosSearch(f"{self.keyword} in nature", limit = 5) # limit = max number of returned videos
                             time.sleep(0.5)       
 
                         # check durations and find best
